@@ -6,6 +6,7 @@ from colorama import init, Fore, Style
 from tabulate import tabulate
 import re
 from copy import deepcopy
+import requests
 
 # Inicializa colorama para dar estilo al texto en la CLI
 init(autoreset=True)
@@ -17,11 +18,147 @@ notas_alumno_original = None
 # Definición global de usuario
 usuario = None
 
+#FUNCIONES DE RUTAS *********************************************************************************************************************************** 
+
+# Función para obtener los dispositivos conectados
+def obtener_dispositivos(ip_controlador):
+    url = f"http://{ip_controlador}:8080/wm/device/"
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"Error al obtener dispositivos: {response.status_code}")
+            return []
+    except Exception as e:
+        print(f"Excepción al obtener dispositivos: {e}")
+        return []
+
+# Función para actualizar attachment points en rutas.yaml
+def actualizar_attachment_points_usuarios(ip_controlador, rutas, usuarios):
+    dispositivos = obtener_dispositivos(ip_controlador)
+
+    # Mapear usuarios por su MAC
+    macs_usuarios = {usuario['mac']: usuario for usuario in usuarios}
+
+    # Crear una lista de usuarios con attachmentPoints actualizados
+    usuarios_actualizados = []
+
+    for usuario in usuarios:
+        mac = usuario['mac']
+        attachment_points = []
+
+        # Buscar el dispositivo que coincida con la MAC del usuario
+        for dispositivo in dispositivos:
+            if dispositivo.get('mac', [None])[0] == mac:
+                attachment_points = [
+                    {'switchDPID': ap.get('switchDPID'), 'port': ap.get('port')}
+                    for ap in dispositivo.get('attachmentPoint', [])
+                ]
+                break
+
+        # Agregar o actualizar el usuario en la lista de rutas
+        usuarios_actualizados.append({
+            'codigo': usuario['codigo'],
+            'nombre': usuario['nombre'],
+            'attachmentPoint': attachment_points,
+        })
+
+    # Reemplazar la lista de usuarios en rutas.yaml
+    rutas['usuarios'] = usuarios_actualizados
+
+    # Guardar los cambios en rutas.yaml
+    guardar_rutas(rutas)
+
+
+def actualizar_attachment_points_servidores(ip_controlador, rutas, servidores):
+    dispositivos = obtener_dispositivos(ip_controlador)
+
+    # Mapear servidores por su MAC
+    macs_servidores = {servidor['mac']: servidor for servidor in servidores}
+
+    # Crear una lista de servidores con attachmentPoints actualizados
+    servidores_actualizados = []
+
+    for servidor in servidores:
+        mac = servidor['mac']
+        attachment_points = []
+
+        # Buscar el dispositivo que coincida con la MAC del servidor
+        for dispositivo in dispositivos:
+            if dispositivo.get('mac', [None])[0] == mac:
+                attachment_points = [
+                    {'switchDPID': ap.get('switchDPID'), 'port': ap.get('port')}
+                    for ap in dispositivo.get('attachmentPoint', [])
+                ]
+                break
+
+        # Agregar o actualizar el servidor en la lista de rutas
+        servidores_actualizados.append({
+            'codigo_servidor': servidor['codigo_servidor'],
+            'nombre': servidor['nombre'],
+            'attachmentPoint': attachment_points,
+        })
+
+    # Reemplazar la lista de servidores en rutas.yaml
+    rutas['servidores'] = servidores_actualizados
+
+    # Guardar los cambios en rutas.yaml
+    guardar_rutas(rutas)
+    
+
+
+def actualizar_attachment_point_usuario_logueado(ip_controlador, rutas, usuario_logueado):
+    dispositivos = obtener_dispositivos(ip_controlador)
+    mac = usuario_logueado['mac']
+    attachment_points = []
+
+    # Buscar el dispositivo conectado correspondiente a la MAC del usuario logueado
+    for dispositivo in dispositivos:
+        if dispositivo.get('mac', [None])[0] == mac:
+            attachment_points = [
+                {'switchDPID': ap.get('switchDPID'), 'port': ap.get('port')}
+                for ap in dispositivo.get('attachmentPoint', [])
+            ]
+            break
+
+    # Actualizar el usuario en rutas.yaml
+    for usuario in rutas['usuarios']:
+        if usuario['codigo'] == usuario_logueado['codigo']:
+            usuario['attachmentPoint'] = attachment_points
+            break
+    else:
+        # Si el usuario no está en rutas.yaml, lo agregamos
+        rutas['usuarios'].append({
+            'codigo': usuario_logueado['codigo'],
+            'nombre': usuario_logueado['nombre'],
+            'attachmentPoint': attachment_points
+        })
+
+    # Guardar los cambios en rutas.yaml
+    guardar_rutas(rutas)
+    print(f"Attachment point del usuario {usuario_logueado['nombre']} actualizado en rutas.yaml.")
+
+
+
+# Función para guardar las rutas actualizadas
+def guardar_rutas(rutas):
+    ruta_archivo = os.path.join(os.path.dirname(__file__), "rutas.yaml")
+    with open(ruta_archivo, 'w', encoding="utf-8") as archivo:
+        yaml.dump(rutas, archivo, default_flow_style=False, allow_unicode=True)
+
+
+
 #ALUMNOS **********************************************************************************************************************************************
 
-# Función para cargar la base de datos YAML
-def cargar_base_datos():
+# Funciones para cargar la base de datos YAML
+def cargar_base_datos_usuarios():
     ruta = os.path.join(os.path.dirname(__file__), "database.yaml")
+    with open(ruta, 'r', encoding="utf-8") as archivo:
+        return yaml.safe_load(archivo)
+    
+def cargar_base_datos_rutas():
+    ruta = os.path.join(os.path.dirname(__file__), "rutas.yaml")
     with open(ruta, 'r', encoding="utf-8") as archivo:
         return yaml.safe_load(archivo)
 
@@ -768,24 +905,38 @@ def agregar_curso():
 
 #******************************************************************************************************************************************************
 
-# Función principal
 def main():
-    global db
-
-    # Cargar base de datos
-    db = cargar_base_datos()
-    usuarios = db.get("usuarios", [])
+    # Cargar las bases de datos
+    db_usuarios = cargar_base_datos_usuarios()  # Base de datos de usuarios
+    rutas = cargar_base_datos_rutas()  # Inicializar o cargar rutas.yaml
 
     # Mostrar el banner
     mostrar_banner()
 
-    # Login
-    usuario_logueado = login(usuarios)
+    # IP del controlador Floodlight
+    ip_controlador = "10.20.12.146"
+
+    # Actualizar attachment points de todos los usuarios al inicio
+    usuarios = db_usuarios['usuarios']
+    servidores =db_usuarios['servidores']
+    actualizar_attachment_points_usuarios(ip_controlador, rutas, usuarios)
+    actualizar_attachment_points_servidores(ip_controlador,rutas, servidores)
+
+    # Login del usuario
+    usuario_logueado = login(db_usuarios['usuarios'])
+
+    # Actualizar solo el attachment point del usuario logueado
+    actualizar_attachment_point_usuario_logueado(ip_controlador, rutas, usuario_logueado)
 
     # Mostrar menú correspondiente al rol
     while True:
-        mostrar_menu(usuario_logueado, db)
+        mostrar_menu(usuario_logueado, db_usuarios)
         break
+
+    
+
+
+
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,37 @@
+servidores:
+- attachmentPoint:
+  - port: 5
+    switchDPID: 00:00:ee:14:e3:a7:af:44
+  codigo_servidor: ServerTEL1
+  nombre: Servidor 1
+- attachmentPoint:
+  - port: 3
+    switchDPID: 00:00:32:df:d5:6a:f9:42
+  codigo_servidor: ServerTEL2
+  nombre: Servidor 2
+usuarios:
+- attachmentPoint:
+  - port: 3
+    switchDPID: 00:00:9e:31:c2:9e:5a:4d
+  codigo: 20241001
+  nombre: Carlos Gomez
+- attachmentPoint:
+  - port: 3
+    switchDPID: 00:00:9e:31:c2:9e:5a:4d
+  codigo: 20001002
+  nombre: Ana Rivera
+- attachmentPoint:
+  - port: 3
+    switchDPID: 00:00:9e:31:c2:9e:5a:4d
+  codigo: 20241003
+  nombre: Juan Martinez
+- attachmentPoint:
+  - port: 3
+    switchDPID: 00:00:9e:31:c2:9e:5a:4d
+  codigo: 20051003
+  nombre: Armando Casas
+- attachmentPoint:
+  - port: 3
+    switchDPID: 00:00:9e:31:c2:9e:5a:4d
+  codigo: 20031212
+  nombre: Manuel Yarleque

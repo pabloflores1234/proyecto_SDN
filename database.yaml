@@ -1,145 +1,104 @@
-cursos:
-- alumnos:
-  - 20241001
-  - 20241003
-  codigo_curso: TEL201
-  nombre: Redes Definidas por Software
-  profesor: 20001002
-  servidor:
-  - nombre: ServerTEL1
-    servicios_permitidos:
-    - ssh
-    - web
-- alumnos:
-  - 20241003
-  - 20241001
-  codigo_curso: TEL202
-  nombre: Introducción a Bases de Datos
-  profesor: 20031212
-  servidor:
-  - nombre: ServerTEL2
-    servicios_permitidos:
-    - ssh
-- alumnos:
-  - 20241003
-  codigo_curso: TEL343
-  nombre: Ingeniria de Redes Cloud
-  profesor: 20001002
-  servidor: []
-notas:
-- alumnos:
-  - alumno: 20241001
-    ex1: Pendiente
-    ex2: Pendiente
-    pc1: 13
-    pc2: 12
-    pc3: 15
-    pc4: 13
-  - alumno: 20241003
-    ex1: Pendiente
-    ex2: Pendiente
-    pc1: 16
-    pc2: 14
-    pc3: 17
-    pc4: 18
-  curso: TEL201
-  nombre: Redes Definidas por Software
-- alumnos:
-  - alumno: 20241003
-    ex1: 12
-    ex2: Pendiente
-    lab1: 16
-    lab2: 15
-    lab3: 14
-    lab4: 18
-    lab5: Pendiente
-    lab6: Pendiente
-    lab7: Pendiente
-  - alumno: 20241001
-    ex1: Pendiente
-    ex2: Pendiente
-    lab1: Pendiente
-    lab2: Pendiente
-    lab3: Pendiente
-    lab4: Pendiente
-    lab5: Pendiente
-    lab6: Pendiente
-    lab7: Pendiente
-  curso: TEL202
-  nombre: Introducción a Bases de Datos
-- alumnos:
-  - alumno: 20241003
-    ex1: Pendiente
-    ex2: Pendiente
-    lab1: Pendiente
-    lab2: Pendiente
-    lab3: Pendiente
-    lab4: Pendiente
-    lab5: Pendiente
-    lab6: Pendiente
-    lab7: Pendiente
-    ta: Pendiente
-  curso: TEL343
-  nombre: Ingeniria de Redes Cloud
-reglas:
-- action: ALLOW
-  codigo_regla: ReglaTEL1
-  descripcion: Permite acceso SSH al servidor principal
-  nombre_regla: Permitir SSH
-  svr_ip: 192.168.1.10
-  svr_port: 22
-- action: ALLOW
-  codigo_regla: ReglaTEL2
-  descripcion: Permite acceso HTTP al servidor principal
-  nombre_regla: Permitir Web
-  svr_ip: 192.168.1.10
-  svr_port: 80
-reglas_servidores:
-- reglas_aplicadas:
-  - ReglaTEL1
-  - ReglaTEL2
-  servidor: ServerTEL1
-- reglas_aplicadas:
-  - ReglaTEL1
-  servidor: ServerTEL2
-servidores:
-- codigo_servidor: ServerTEL1
-  ip: 192.168.1.10
-  mac: 44:22:11:33:AA:BB
-  nombre: Servidor Principal
-  protocolo_conexion: TCP
-  puerto: 22
-  servicio: ssh
-- codigo_servidor: ServerTEL2
-  ip: 192.168.1.11
-  mac: 44:22:11:33:CC:DD
-  nombre: Servidor Secundario
-  protocolo_conexion: TCP
-  puerto: 22
-  servicio: ssh
 usuarios:
-- codigo: 20241001
-  contrasenia: a123
-  mac: 44:11:22:33:AA:BB
-  nombre: Carlos Gomez
-  rol: Estudiante
-- codigo: 20001002
-  contrasenia: a123
-  mac: 44:11:22:44:CC:DD
-  nombre: Ana Rivera
-  rol: Profesor
-- codigo: 20241003
-  contrasenia: a123
-  mac: 44:11:33:55:EE:FF
-  nombre: Juan Martinez
-  rol: Estudiante
-- codigo: 20051003
-  contrasenia: a123
-  mac: 44:11:33:66:GG:HH
-  nombre: Armando Casas
-  rol: Administrador
-- codigo: 20031212
-  contrasenia: a123
-  mac: 44:11:40:0B:49:4A
-  nombre: Manuel Yarleque
-  rol: Profesor
+  - codigo: 20241001
+    contrasenia: a123
+    mac: fa:16:3e:28:2e:98
+    nombre: Carlos Gomez
+    rol: Estudiante
+  - codigo: 20001002
+    contrasenia: a123
+    mac: fa:16:3e:28:2e:98
+    nombre: Ana Rivera
+    rol: Profesor
+  - codigo: 20241003
+    contrasenia: a123
+    mac: fa:16:3e:28:2e:98
+    nombre: Juan Martinez
+    rol: Estudiante
+  - codigo: 20051003
+    contrasenia: a123
+    mac: fa:16:3e:28:2e:98
+    nombre: Armando Casas
+    rol: Administrador
+  - codigo: 20031212
+    contrasenia: a123
+    mac: fa:16:3e:28:2e:98
+    nombre: Manuel Yarleque
+    rol: Profesor
+cursos:
+  - alumnos:
+      - 20241001
+      - 20241003
+    codigo_curso: TEL201
+    nombre: Redes Definidas por Software
+    profesor: 20001002
+    servidor:
+      - nombre: ServerTEL1
+        servicios_permitidos:
+          - ssh
+          - web
+  - alumnos:
+      - 20241003
+      - 20241001
+    codigo_curso: TEL202
+    nombre: Introducción a Bases de Datos
+    profesor: 20031212
+    servidor:
+      - nombre: ServerTEL2
+        servicios_permitidos:
+          - ssh
+servidores:
+  - codigo_servidor: ServerTEL1
+    ip: 10.0.0.2
+    mac: fa:16:3e:e7:63:77
+    nombre: Servidor 1
+    protocolo_conexion: TCP
+    puerto: 22
+    servicio: ssh
+  - codigo_servidor: ServerTEL2
+    ip: 10.0.0.3
+    mac: fa:16:3e:d4:cb:2f
+    nombre: Servidor 2
+    protocolo_conexion: TCP
+    puerto: 22
+    servicio: ssh
+notas:
+  - alumnos:
+      - alumno: 20241001
+        ex1: Pendiente
+        ex2: Pendiente
+        pc1: 13
+        pc2: 12
+        pc3: 15
+        pc4: 13
+      - alumno: 20241003
+        ex1: Pendiente
+        ex2: Pendiente
+        pc1: 16
+        pc2: 14
+        pc3: 17
+        pc4: 18
+    curso: TEL201
+    nombre: Redes Definidas por Software
+  - alumnos:
+      - alumno: 20241003
+        ex1: 12
+        ex2: Pendiente
+        lab1: 16
+        lab2: 15
+        lab3: 14
+        lab4: 18
+        lab5: Pendiente
+        lab6: Pendiente
+        lab7: Pendiente
+      - alumno: 20241001
+        ex1: Pendiente
+        ex2: Pendiente
+        lab1: Pendiente
+        lab2: Pendiente
+        lab3: Pendiente
+        lab4: Pendiente
+        lab5: Pendiente
+        lab6: Pendiente
+        lab7: Pendiente
+    curso: TEL202
+    nombre: Introducción a Bases de Datos

@@ -7,6 +7,8 @@ from tabulate import tabulate
 import re
 from copy import deepcopy
 import requests
+import subprocess
+import paramiko
 
 # Inicializa colorama para dar estilo al texto en la CLI
 init(autoreset=True)
@@ -97,6 +99,7 @@ def actualizar_attachment_points_servidores(ip_controlador, rutas, servidores):
         servidores_actualizados.append({
             'codigo_servidor': servidor['codigo_servidor'],
             'nombre': servidor['nombre'],
+            'ip':servidor['ip'],
             'attachmentPoint': attachment_points,
         })
 
@@ -105,8 +108,6 @@ def actualizar_attachment_points_servidores(ip_controlador, rutas, servidores):
 
     # Guardar los cambios en rutas.yaml
     guardar_rutas(rutas)
-    
-
 
 def actualizar_attachment_point_usuario_logueado(ip_controlador, rutas, usuario_logueado):
     dispositivos = obtener_dispositivos(ip_controlador)
@@ -139,6 +140,114 @@ def actualizar_attachment_point_usuario_logueado(ip_controlador, rutas, usuario_
     guardar_rutas(rutas)
     print(f"Attachment point del usuario {usuario_logueado['nombre']} actualizado en rutas.yaml.")
 
+def crear_ruta_estatica(ip_controlador, src_dpid, src_port, dst_dpid, dst_port):
+    try:
+        url = f"http://{ip_controlador}:8080/wm/staticflowpusher/json"
+        flow_entry = {
+            "switch": src_dpid,
+            "name": f"flow-{src_dpid}-{dst_dpid}",
+            "cookie": "0",
+            "priority": "1000",
+            "ingress-port": src_port,
+            "actions": f"output={dst_port}"
+        }
+        response = requests.post(url, json=flow_entry)
+        response.raise_for_status()
+        print("Ruta estática creada exitosamente.")
+        return True
+    except requests.RequestException as e:
+        print(f"Error al crear la ruta estática: {e}")
+        return False
+
+
+def validar_usuario_curso(usuario_logueado, curso):
+    """
+    Valida si el usuario tiene acceso al curso.
+    
+    Args:
+        usuario_logueado (dict): Información del usuario logueado.
+        curso (dict): Información del curso seleccionado.
+    
+    Returns:
+        bool: True si el usuario tiene acceso, False si no lo tiene.
+    """
+    if usuario_logueado['rol'] == 'Administrador':
+        return True  # Los administradores tienen acceso a todos los cursos
+
+    if usuario_logueado['rol'] == 'Profesor' and usuario_logueado['codigo'] == curso['profesor']:
+        return True  # Los profesores tienen acceso a sus cursos
+
+    if usuario_logueado['rol'] == 'Estudiante' and usuario_logueado['codigo'] in curso['alumnos']:
+        return True  # Los estudiantes tienen acceso solo a los cursos en los que están inscritos
+
+    print(f"El usuario {usuario_logueado['nombre']} ({usuario_logueado['rol']}) no tiene acceso al curso {curso['nombre']}.")
+    return False
+
+def validar_conectividad_desde_h1(ip_gateway, port, usuario_h1, contra_h1, ip_destino):
+    try:
+        ssh_client = paramiko.SSHClient()
+        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh_client.connect(ip_gateway, port=port, username=usuario_h1, password=contra_h1)
+        print("Conexión SSH a h1 establecida.")
+
+        comando_ping = f"ping -c 1 {ip_destino}"
+        stdin, stdout, stderr = ssh_client.exec_command(comando_ping)
+        output = stdout.read().decode('utf-8')
+        ssh_client.close()
+
+        if "1 packets transmitted, 1 received" in output:
+            print("Conectividad validada con éxito desde h1.")
+            return True
+        else:
+            print(f"Ping fallido desde h1: {output}")
+            return False
+    except paramiko.SSHException as e:
+        print(f"Error al conectarse a h1: {e}")
+        return False
+
+
+def manejar_seleccion_curso(usuario_logueado, curso, ip_controlador, rutas):
+    """
+    Gestiona la selección de un curso por parte del usuario logueado, incluyendo
+    la creación de rutas estáticas y la validación de conectividad.
+
+    Args:
+        usuario_logueado (dict): Información del usuario logueado.
+        curso (dict): Información del curso seleccionado.
+        ip_controlador (str): IP del controlador Floodlight.
+        rutas (dict): Información de attachment points en rutas.yaml.
+    
+    Returns:
+        bool: True si todo fue exitoso, False si hubo errores.
+    """
+    # Validar si el usuario tiene acceso al curso
+    if not validar_usuario_curso(usuario_logueado, curso):
+        return False
+
+    # Obtener datos de attachment points
+    src_dpid = rutas['usuarios'][usuario_logueado['codigo']]['attachmentPoint'][0]['switchDPID']
+    src_port = rutas['usuarios'][usuario_logueado['codigo']]['attachmentPoint'][0]['port']
+    dst_dpid = rutas['servidores'][curso['servidor'][0]['nombre']]['attachmentPoint'][0]['switchDPID']
+    dst_port = rutas['servidores'][curso['servidor'][0]['nombre']]['attachmentPoint'][0]['port']
+
+    # Crear la ruta estática
+    if not crear_ruta_estatica(ip_controlador, src_dpid, src_port, dst_dpid, dst_port):
+        print("Error al crear la ruta estática. Abortando.")
+        return False
+
+    # Validar conectividad desde h1
+    ip_gateway = "10.20.12.146"
+    port = 5811
+    usuario_h1 = usuario_logueado['usuario_h1']
+    contra_h1 = usuario_logueado['contra_h1']
+    ip_servidor = curso['servidor'][0]['ip']
+
+    if not validar_conectividad_desde_h1(ip_gateway, port, usuario_h1, contra_h1, ip_servidor):
+        print("Conectividad no validada. Abortando.")
+        return False
+
+    print(f"El usuario {usuario_logueado['nombre']} ahora tiene acceso al curso {curso['nombre']}.")
+    return True
 
 
 # Función para guardar las rutas actualizadas
@@ -200,8 +309,18 @@ def login(usuarios):
         # Si no se encontró el usuario o la contraseña no coincide
         print(Fore.RED + "\nCredenciales incorrectas. Intente nuevamente.\n")
 
-# Función para mostrar los cursos en los que está inscrito el estudiante
-def ver_cursos(usuario, cursos, db):
+# Función de ver cursos
+def ver_cursos(usuario, cursos, db, rutas, ip_controlador):
+    """
+    Permite al usuario ver los cursos existentes y gestionar su acceso mediante rutas y validaciones.
+
+    Args:
+        usuario (dict): Información del usuario logueado.
+        cursos (list): Lista de cursos.
+        db (dict): Base de datos de usuarios, cursos, etc.
+        rutas (dict): Datos de attachment points en rutas.yaml.
+        ip_controlador (str): Dirección IP del controlador Floodlight.
+    """
     print(Fore.CYAN + Style.BRIGHT + "\n== Cursos Existentes ==\n")
     
     # Mostrar todos los cursos disponibles
@@ -218,12 +337,49 @@ def ver_cursos(usuario, cursos, db):
     if opcion == '0':
         return
 
-    if opcion.isdigit() and 0 < int(opcion) <= len(cursos_inscritos):
-        curso_seleccionado = cursos_inscritos[int(opcion)-1]
-        mostrar_info_curso(curso_seleccionado, db)
+    if opcion.isdigit() and 0 < int(opcion) <= len(cursos):
+        curso_seleccionado = cursos[int(opcion) - 1]
+
+        # Validar si el usuario pertenece al curso
+        if validar_usuario_curso(usuario, curso_seleccionado):
+            servidor = curso_seleccionado['servidor'][0]
+            servidor_info = next((s for s in rutas['servidores'] if s['codigo_servidor'] == servidor['codigo_servidor']), None)
+
+
+            if not servidor_info or 'ip' not in servidor_info:
+                print(Fore.RED + "No se encontró información del servidor o su IP en rutas.yaml.")
+                return
+
+            # Obtener los attachment points
+            usuario_ap = next((u['attachmentPoint'] for u in rutas['usuarios'] if u['codigo'] == usuario['codigo']), [])
+            servidor_ap = servidor_info['attachmentPoint']
+
+            if not usuario_ap or not servidor_ap:
+                print(Fore.RED + "Faltan datos de attachment point para el usuario o el servidor.")
+                return
+
+            # Crear la ruta estática
+            if crear_ruta_estatica(ip_controlador, usuario_ap[0]['switchDPID'], usuario_ap[0]['port'], servidor_ap[0]['switchDPID'], servidor_ap[0]['port']):
+                # Validar conectividad desde h1
+                if validar_conectividad_desde_h1(
+                        ip_gateway=ip_controlador,
+                        port=5811,
+                        usuario_h1=usuario['usuario_h1'],
+                        contra_h1=usuario['contra_h1'],
+                        ip_destino=servidor_info['ip']):
+                    print(Fore.GREEN + f"¡Ruta creada y conectividad validada para el curso {curso_seleccionado['nombre']}!")
+                    mostrar_info_curso(curso_seleccionado, db)
+                else:
+                    print(Fore.RED + "La ruta fue creada, pero la conectividad no fue validada desde h1.")
+            else:
+                print(Fore.RED + "No se pudo crear la ruta estática.")
+        else:
+            print(Fore.RED + f"El usuario {usuario['nombre']} no tiene acceso al curso {curso_seleccionado['nombre']}.")
     else:
         print(Fore.RED + "Opción inválida. Intenta nuevamente.\n")
-        ver_cursos(usuario, cursos, db)
+        ver_cursos(usuario, cursos, db, rutas, ip_controlador)
+
+
 
 # Función para mostrar más información de un curso
 def mostrar_info_curso(curso, db):
@@ -305,7 +461,7 @@ def ver_participantes(curso):
 #*********************************************************************************************************************************************************
 
 # Función para mostrar el menú dependiendo del rol y manejar las opciones
-def mostrar_menu(usuario, db):
+def mostrar_menu(usuario, db, rutas, ip_controlador):
     while True:  # Bucle para mantener el menú activo hasta que se salga
         rol = usuario["rol"]
         print(Fore.BLUE + f"Bienvenido, {usuario['nombre']} ({rol})\n")
@@ -317,7 +473,7 @@ def mostrar_menu(usuario, db):
             print("2. Cerrar Sesión")
             opcion = input(Fore.YELLOW + "\nSeleccione una opción: ").strip()
             if opcion == '1':
-                ver_cursos(usuario, db.get('cursos', []), db)
+                ver_cursos(usuario, db.get('cursos', []), db, rutas, ip_controlador)
             elif opcion == '2':
                 print("Cerrando sesión...")
                 return
@@ -354,6 +510,7 @@ def mostrar_menu(usuario, db):
         else:
             print(Fore.RED + "Error: Rol no reconocido.")
             return
+
 
 
 #PROFESOR **********************************************************************************************************************************************
@@ -930,13 +1087,8 @@ def main():
 
     # Mostrar menú correspondiente al rol
     while True:
-        mostrar_menu(usuario_logueado, db_usuarios)
+        mostrar_menu(usuario_logueado, db_usuarios, rutas, ip_controlador)
         break
-
-    
-
-
-
 
 if __name__ == "__main__":
     main()

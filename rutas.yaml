@@ -3,11 +3,13 @@ servidores:
   - port: 5
     switchDPID: 00:00:ee:14:e3:a7:af:44
   codigo_servidor: ServerTEL1
+  ip: 10.0.0.2
   nombre: Servidor 1
 - attachmentPoint:
   - port: 3
     switchDPID: 00:00:32:df:d5:6a:f9:42
   codigo_servidor: ServerTEL2
+  ip: 10.0.0.3
   nombre: Servidor 2
 usuarios:
 - attachmentPoint:

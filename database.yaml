@@ -2,48 +2,61 @@ usuarios:
   - codigo: 20241001
     contrasenia: a123
     mac: fa:16:3e:28:2e:98
+    ip: 10.0.0.1
+    usuario_h1: ubuntu
+    contra_h1: Pablox12344
     nombre: Carlos Gomez
     rol: Estudiante
   - codigo: 20001002
     contrasenia: a123
     mac: fa:16:3e:28:2e:98
+    ip: 10.0.0.1
+    usuario_h1: ubuntu
+    contra_h1: Pablox12344
     nombre: Ana Rivera
     rol: Profesor
   - codigo: 20241003
     contrasenia: a123
     mac: fa:16:3e:28:2e:98
+    ip: 10.0.0.1
+    usuario_h1: ubuntu
+    contra_h1: Pablox12344
     nombre: Juan Martinez
     rol: Estudiante
   - codigo: 20051003
     contrasenia: a123
     mac: fa:16:3e:28:2e:98
+    ip: 10.0.0.1
+    usuario_h1: ubuntu
+    contra_h1: Pablox12344
     nombre: Armando Casas
     rol: Administrador
   - codigo: 20031212
     contrasenia: a123
     mac: fa:16:3e:28:2e:98
+    ip: 10.0.0.1
+    usuario_h1: ubuntu
+    contra_h1: Pablox12344
     nombre: Manuel Yarleque
     rol: Profesor
 cursos:
   - alumnos:
       - 20241001
-      - 20241003
     codigo_curso: TEL201
     nombre: Redes Definidas por Software
     profesor: 20001002
     servidor:
-      - nombre: ServerTEL1
+      - codigo_servidor: ServerTEL1
         servicios_permitidos:
           - ssh
           - web
   - alumnos:
       - 20241003
-      - 20241001
     codigo_curso: TEL202
     nombre: Introducción a Bases de Datos
     profesor: 20031212
     servidor:
-      - nombre: ServerTEL2
+      - codigo_servidor: ServerTEL2
         servicios_permitidos:
           - ssh
 servidores:

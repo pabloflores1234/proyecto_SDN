@@ -635,6 +635,137 @@ def crear_seccion_notas(estudiante, curso):
 
     print(f"Sección de notas creada para el alumno {estudiante['nombre']}.")
 
+def administrar_cursos():
+    while True:
+        print("\n--- Menú de Administración de Cursos ---")
+        print("1. Listar cursos")
+        print("2. Agregar nuevo curso")
+        print("3. Volver atrás")
+
+        opcion = input("Seleccione una opción: ").strip()
+
+        if opcion == '1':
+            listar_cursos()
+        elif opcion == '2':
+            agregar_curso()
+        elif opcion == '3':
+            print("Volviendo al menú anterior...")
+            break
+        else:
+            print("Opción inválida. Intenta nuevamente.")
+
+def listar_cursos():
+    print("\n--- Listado de Cursos ---")
+    headers = ["Código", "Nombre", "Profesor"]
+    cursos_data = [
+        [curso['codigo_curso'], curso['nombre'], obtener_nombre_profesor(curso['profesor'])]
+        for curso in db['cursos']
+    ]
+    print(tabulate(cursos_data, headers=headers, tablefmt="grid"))
+
+def obtener_nombre_profesor(codigo_profesor):
+    if codigo_profesor == "Sin profesor":
+        return "Sin profesor"
+    profesor = next((p for p in db['usuarios'] if p['codigo'] == codigo_profesor and p['rol'] == 'Profesor'), None)
+    return profesor['nombre'] if profesor else "Desconocido"
+
+def agregar_curso():
+    print("\n--- Agregar Nuevo Curso ---")
+
+    # Mostrar los cursos existentes
+    print("\nCursos existentes:")
+    headers_cursos = ["Código", "Nombre", "Profesor", "Alumnos"]
+    cursos_data = [
+        [curso['codigo_curso'], curso['nombre'], obtener_nombre_profesor(curso['profesor']),
+         len(curso['alumnos'])]
+        for curso in db['cursos']
+    ]
+    print(tabulate(cursos_data, headers=headers_cursos, tablefmt="grid"))
+
+    # Mostrar lista de profesores y alumnos
+    print("\nUsuarios disponibles:")
+    headers_usuarios = ["Código", "Nombre", "Rol"]
+    usuarios_data = [
+        [user['codigo'], user['nombre'], user['rol']]
+        for user in sorted(db['usuarios'], key=lambda x: x['rol'] == 'Estudiante')  # Profesores primero
+    ]
+    print(tabulate(usuarios_data, headers=headers_usuarios, tablefmt="grid"))
+
+    # Solicitar datos para el nuevo curso
+    nombre_curso = input("\nIngrese el nombre del nuevo curso: ").strip()
+
+    while True:
+        codigo_curso = input("Ingrese el código del curso (formato TEL###): ").strip()
+        if codigo_curso.startswith("TEL") and len(codigo_curso) == 6 and codigo_curso[3:].isdigit():
+            break
+        print("Código inválido. Debe seguir el formato TEL###.")
+
+    # Crear el formato de notas
+    formato_notas = {}
+    while True:
+        tipo_evaluacion = input("¿Desea incluir prácticas o laboratorios? [practicas/laboratorios]: ").strip().lower()
+        if tipo_evaluacion in ["practicas", "laboratorios"]:
+            tipo = "pc" if tipo_evaluacion == "practicas" else "lab"
+            break
+        print("Opción inválida. Debe elegir entre 'practicas' o 'laboratorios'.")
+
+    while True:
+        num_evaluaciones = input(f"Ingrese el número de {tipo} (3-7): ").strip()
+        if num_evaluaciones.isdigit() and 3 <= int(num_evaluaciones) <= 7:
+            num_evaluaciones = int(num_evaluaciones)
+            formato_notas.update({f"{tipo}{i + 1}": "Pendiente" for i in range(num_evaluaciones)})
+            break
+        print("Número inválido. Debe estar entre 3 y 7.")
+
+    incluir_tarea = input("¿Desea incluir una tarea académica? [s/n]: ").strip().lower()
+    if incluir_tarea == 's':
+        formato_notas["ta"] = "Pendiente"
+
+    while True:
+        num_examenes = input("Ingrese el número de exámenes (1-4): ").strip()
+        if num_examenes.isdigit() and 1 <= int(num_examenes) <= 4:
+            num_examenes = int(num_examenes)
+            formato_notas.update({f"ex{i + 1}": "Pendiente" for i in range(num_examenes)})
+            break
+        print("Número inválido. Debe estar entre 1 y 4.")
+
+    # Solicitar profesor y alumno inicial
+    while True:
+        codigo_profesor = input("Ingrese el código del profesor a cargo: ").strip()
+        profesor = next((p for p in db['usuarios'] if str(p['codigo']) == codigo_profesor and p['rol'] == 'Profesor'), None)
+        if profesor:
+            break
+        print("Código de profesor inválido o no encontrado.")
+
+    while True:
+        codigo_alumno = input("Ingrese el código de un alumno para agregar al curso: ").strip()
+        alumno = next((a for a in db['usuarios'] if str(a['codigo']) == codigo_alumno and a['rol'] == 'Estudiante'), None)
+        if alumno:
+            break
+        print("Código de alumno inválido o no encontrado.")
+
+    # Crear el curso
+    nuevo_curso = {
+        "codigo_curso": codigo_curso,
+        "nombre": nombre_curso,
+        "profesor": int(codigo_profesor),
+        "alumnos": [int(codigo_alumno)],
+        "servidor": []  # Se puede completar después si es necesario
+    }
+    db['cursos'].append(nuevo_curso)
+
+    # Crear la sección de notas inicial
+    nueva_seccion_notas = {
+        "curso": codigo_curso,
+        "nombre": nombre_curso,
+        "alumnos": [{"alumno": int(codigo_alumno), **formato_notas}]
+    }
+    db['notas'].append(nueva_seccion_notas)
+
+    # Guardar la base de datos
+    guardar_base_datos(db)
+    print(f"Curso '{nombre_curso}' creado con éxito.")
+
 #******************************************************************************************************************************************************
 
 # Función principal

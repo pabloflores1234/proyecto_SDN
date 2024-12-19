@@ -20,6 +20,12 @@ cursos:
   - nombre: ServerTEL2
     servicios_permitidos:
     - ssh
+- alumnos:
+  - 20241003
+  codigo_curso: TEL343
+  nombre: Ingeniria de Redes Cloud
+  profesor: 20001002
+  servidor: []
 notas:
 - alumnos:
   - alumno: 20241001
@@ -61,6 +67,20 @@ notas:
     lab7: Pendiente
   curso: TEL202
   nombre: Introducción a Bases de Datos
+- alumnos:
+  - alumno: 20241003
+    ex1: Pendiente
+    ex2: Pendiente
+    lab1: Pendiente
+    lab2: Pendiente
+    lab3: Pendiente
+    lab4: Pendiente
+    lab5: Pendiente
+    lab6: Pendiente
+    lab7: Pendiente
+    ta: Pendiente
+  curso: TEL343
+  nombre: Ingeniria de Redes Cloud
 reglas:
 - action: ALLOW
   codigo_regla: ReglaTEL1

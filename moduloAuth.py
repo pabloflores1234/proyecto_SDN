@@ -183,7 +183,7 @@ def mostrar_menu(usuario, db):
                 ver_cursos(usuario, db.get('cursos', []), db)
             elif opcion == '2':
                 print("Cerrando sesión...")
-                break
+                return
             else:
                 print(Fore.RED + "Opción inválida. Intenta nuevamente.\n")
         
@@ -195,7 +195,7 @@ def mostrar_menu(usuario, db):
                 gestionar_cursos_profesor(db.get('cursos', []))  # Función de ejemplo para gestionar cursos
             elif opcion == '2':
                 print("Saliendo...")
-                break
+                return
             else:
                 print(Fore.RED + "Opción inválida. Intenta nuevamente.\n")
 
@@ -210,13 +210,13 @@ def mostrar_menu(usuario, db):
                 administrar_cursos()  # Función para administrar cursos
             elif opcion == '3':
                 print("Cerrando sesión...")
-                break
+                return
             else:
                 print(Fore.RED + "Opción inválida. Intenta nuevamente.\n")
         
         else:
             print(Fore.RED + "Error: Rol no reconocido.")
-            break
+            return
 
 
 #PROFESOR **********************************************************************************************************************************************
@@ -434,8 +434,7 @@ def administrar_usuarios():
         elif opcion == '2':
             crear_usuario()
         elif opcion == '3':
-            print("Opción para Asignar usuario (Aún por implementar)")
-            # Aquí iría la función para asignar un usuario
+            asignar_usuario()
         elif opcion == '4':
             print("Volviendo al menú principal...")
             break
@@ -507,6 +506,134 @@ def guardar_base_datos(db):
     with open(ruta, 'w', encoding="utf-8") as archivo:
         yaml.dump(db, archivo, default_flow_style=False, allow_unicode=True)
     print("Base de datos guardada en 'database.yaml'")
+
+def asignar_usuario():
+    while True:
+        print("\n--- Menú de Asignación de Usuarios ---")
+        print("1. Asignar profesor")
+        print("2. Asignar estudiante")
+        print("3. Volver atrás")
+        
+        opcion = input("Seleccione una opción: ").strip()
+
+        if opcion == '1':
+            asignar_profesor()
+        elif opcion == '2':
+            asignar_estudiante()
+        elif opcion == '3':
+            print("Volviendo al menú anterior...")
+            break
+        else:
+            print("Opción inválida. Intenta nuevamente.")
+
+def asignar_profesor():
+    print("\n--- Asignar Profesor a un Curso ---")
+    
+    # Listar cursos con "Sin profesor"
+    cursos_sin_profesor = [curso for curso in db['cursos'] if curso['profesor'] == "Sin profesor"]
+
+    if not cursos_sin_profesor:
+        print("Todos los cursos tienen asignado un profesor.")
+        return
+
+    print("\nCursos sin profesor:")
+    headers = ["Código del Curso", "Nombre"]
+    cursos_data = [[curso['codigo_curso'], curso['nombre']] for curso in cursos_sin_profesor]
+    print(tabulate(cursos_data, headers=headers, tablefmt="grid"))
+
+    # Listar profesores disponibles
+    print("\nProfesores disponibles:")
+    profesores = [user for user in db['usuarios'] if user['rol'] == 'Profesor']
+    headers = ["Código", "Nombre"]
+    profesores_data = [[profesor['codigo'], profesor['nombre']] for profesor in profesores]
+    print(tabulate(profesores_data, headers=headers, tablefmt="grid"))
+
+    # Solicitar asignación
+    codigo_curso = input("\nIngrese el código del curso: ").strip()
+    codigo_profesor = input("Ingrese el código del profesor: ").strip()
+
+    curso = next((curso for curso in cursos_sin_profesor if curso['codigo_curso'] == codigo_curso), None)
+    profesor = next((profesor for profesor in profesores if str(profesor['codigo']) == codigo_profesor), None)
+
+    if not curso or not profesor:
+        print("Código de curso o profesor inválido.")
+        return
+
+    # Asignar el profesor al curso
+    curso['profesor'] = profesor['codigo']
+    guardar_base_datos(db)
+    print(f"Profesor {profesor['nombre']} asignado al curso {curso['nombre']} con éxito.")
+
+def asignar_estudiante():
+    print("\n--- Asignar Estudiante a un Curso ---")
+    
+    # Listar todos los cursos
+    headers_cursos = ["Código del Curso", "Nombre"]
+    cursos_data = [[curso['codigo_curso'], curso['nombre']] for curso in db['cursos']]
+    print("\nCursos disponibles:")
+    print(tabulate(cursos_data, headers=headers_cursos, tablefmt="grid"))
+
+    # Listar estudiantes con cursos inscritos
+    print("\nEstudiantes disponibles:")
+    estudiantes = [user for user in db['usuarios'] if user['rol'] == 'Estudiante']
+    headers_estudiantes = ["Código", "Nombre", "Cursos Inscritos"]
+    estudiantes_data = []
+
+    for estudiante in estudiantes:
+        cursos_inscritos = [curso['nombre'] for curso in db['cursos'] if estudiante['codigo'] in curso['alumnos']]
+        cursos_inscritos_str = ", ".join(cursos_inscritos) if cursos_inscritos else "Ninguno"
+        estudiantes_data.append([estudiante['codigo'], estudiante['nombre'], cursos_inscritos_str])
+
+    print(tabulate(estudiantes_data, headers=headers_estudiantes, tablefmt="grid"))
+
+    # Solicitar asignación
+    codigo_estudiante = input("\nIngrese el código del estudiante: ").strip()
+    codigo_curso = input("Ingrese el código del curso: ").strip()
+
+    curso = next((curso for curso in db['cursos'] if curso['codigo_curso'] == codigo_curso), None)
+    estudiante = next((estudiante for estudiante in estudiantes if str(estudiante['codigo']) == codigo_estudiante), None)
+
+    if not curso or not estudiante:
+        print("Código de curso o estudiante inválido.")
+        return
+
+    # Verificar si el estudiante ya está inscrito
+    if estudiante['codigo'] in curso['alumnos']:
+        print("Este alumno ya se encuentra inscrito en el curso.")
+        return
+
+    # Confirmar la asignación
+    confirmacion = input(f"¿Está seguro que desea agregar al alumno {estudiante['nombre']} (código {codigo_estudiante}) al curso {curso['nombre']} (código {codigo_curso})? [s/n]: ").strip().lower()
+    if confirmacion == 's':
+        curso['alumnos'].append(estudiante['codigo'])
+        # Crear notas iniciales para el estudiante en este curso
+        crear_seccion_notas(estudiante, curso)
+        guardar_base_datos(db)
+        print(f"Alumno {estudiante['nombre']} asignado al curso {curso['nombre']} con éxito.")
+    else:
+        print("Asignación cancelada.")
+
+def crear_seccion_notas(estudiante, curso):
+    print(f"Creando sección de notas para el alumno {estudiante['nombre']} en el curso {curso['nombre']}...")
+
+    # Buscar las notas del curso
+    notas_curso = next((notas for notas in db['notas'] if notas['curso'] == curso['codigo_curso']), None)
+    if not notas_curso:
+        print(f"No se encontraron notas registradas para el curso {curso['nombre']}.")
+        return
+
+    # Determinar el formato de las calificaciones basándose en otro alumno
+    if notas_curso['alumnos']:
+        formato_calificaciones = {k: "Pendiente" for k in notas_curso['alumnos'][0] if k != 'alumno'}
+    else:
+        print(f"El curso {curso['nombre']} no tiene formato de calificaciones definido.")
+        return
+
+    # Crear la entrada de notas para el nuevo estudiante
+    nueva_nota = {'alumno': estudiante['codigo'], **formato_calificaciones}
+    notas_curso['alumnos'].append(nueva_nota)
+
+    print(f"Sección de notas creada para el alumno {estudiante['nombre']}.")
 
 #******************************************************************************************************************************************************
 

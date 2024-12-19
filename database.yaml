@@ -12,9 +12,10 @@ cursos:
     - web
 - alumnos:
   - 20241003
+  - 20241001
   codigo_curso: TEL202
   nombre: Introducción a Bases de Datos
-  profesor: 20001002
+  profesor: 20031212
   servidor:
   - nombre: ServerTEL2
     servicios_permitidos:
@@ -22,7 +23,6 @@ cursos:
 notas:
 - alumnos:
   - alumno: 20241001
-    curso: TEL201
     ex1: Pendiente
     ex2: Pendiente
     pc1: 13
@@ -46,6 +46,16 @@ notas:
     lab2: 15
     lab3: 14
     lab4: 18
+    lab5: Pendiente
+    lab6: Pendiente
+    lab7: Pendiente
+  - alumno: 20241001
+    ex1: Pendiente
+    ex2: Pendiente
+    lab1: Pendiente
+    lab2: Pendiente
+    lab3: Pendiente
+    lab4: Pendiente
     lab5: Pendiente
     lab6: Pendiente
     lab7: Pendiente

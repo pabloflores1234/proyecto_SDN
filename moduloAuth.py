@@ -212,6 +212,22 @@ def actualizar_attachment_points_usuarios(ip_controlador, rutas, usuarios):
     # Guardar los cambios en rutas.yaml
     guardar_rutas(rutas)
 
+
+def borrar_rutas(ip_controlador):
+    """
+    Borra todas las rutas estáticas configuradas en el controlador Floodlight.
+    """
+    url = f"http://{ip_controlador}:8080/wm/staticflowpusher/clear/all/json"
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            print(Fore.GREEN + "Cerrado sesión exitoso")
+        else:
+            print(Fore.RED + f"Error al borrar las rutas: {response.status_code}")
+    except Exception as e:
+        print(Fore.RED + f"Excepción al intentar borrar las rutas: {e}")
+   
+
 def actualizar_attachment_point_usuario_logueado(ip_controlador, rutas, usuario_logueado):
     dispositivos = obtener_dispositivos(ip_controlador)
     mac = usuario_logueado['mac']
@@ -282,11 +298,12 @@ def validar_conectividad_desde_h1(ip_gateway, port, usuario_h1, contra_h1, ip_de
         print(Fore.GREEN + "Conexión SSH a h1 establecida.")
 
         # Preguntar si se desea continuar con el ping
-        validacion_ping_propia = input(Fore.YELLOW + "¿Desea continuar con el ping o modificar (SI/NO)? ").strip().upper()
+        validacion_ping_propia = input(Fore.YELLOW + "¿Desea continuar con el ping o probar ping fallido (SI/NO)? ").strip().upper()
 
         if validacion_ping_propia == "NO":
-            print(Fore.YELLOW + "Deteniéndose antes de realizar el ping. Puede realizar modificaciones si lo necesita.")
-            time.sleep(15)
+            print(Fore.YELLOW + "Deteniéndose antes de realizar el ping. Borrando las rutas creadas para demostrar que pasa si no hay ping")
+            time.sleep(5)
+            borrar_rutas(ip_gateway)
             return False
 
         # Realizar un ping desde h1 al servidor destino
@@ -297,7 +314,7 @@ def validar_conectividad_desde_h1(ip_gateway, port, usuario_h1, contra_h1, ip_de
 
         if "1 packets transmitted, 1 received" in output:
             print(Fore.GREEN + f"Ping exitoso al destino {ip_destino}.")
-            mostrar_info_curso(curso, db)  # Llama a mostrar_info_curso si el ping es exitoso
+            mostrar_info_curso(curso, db)
             return True
         else:
             print(Fore.RED + f"Ping fallido al destino {ip_destino}: {output}")
@@ -430,7 +447,7 @@ def ver_cursos(usuario, cursos, db, rutas, ip_controlador):
             ):
                 print(Fore.GREEN + f"Acceso exitoso al curso {curso_seleccionado['nombre']}.")
             else:
-                print(Fore.RED + "No se pudo validar la conectividad al servidor. No hay ping.")
+                print(Fore.RED + "No se pudo validar la conectividad al servidor. No hace ping al servidor del curso deseado.")
         else:
             print(Fore.RED + f"El usuario {usuario['nombre']} no tiene acceso al curso {curso_seleccionado['nombre']}.")
     else:
@@ -534,19 +551,21 @@ def mostrar_menu(usuario, db, rutas, ip_controlador):
             if opcion == '1':
                 ver_cursos(usuario, db.get('cursos', []), db, rutas, ip_controlador)
             elif opcion == '2':
-                print("Cerrando sesión...")
+                print(Fore.YELLOW + "Cerrando sesión...")
+                borrar_rutas(ip_controlador)  # Llamar a borrar las rutas
                 return
             else:
                 print(Fore.RED + "Opción inválida. Intenta nuevamente.\n")
-        
+
         elif rol == "Profesor":
             print(Fore.GREEN + "1. Gestionar cursos")
             print("2. Salir")
             opcion = input(Fore.YELLOW + "\nSeleccione una opción: ").strip()
             if opcion == '1':
-                gestionar_cursos_profesor(db.get('cursos', []))  # Función de ejemplo para gestionar cursos
+                gestionar_cursos_profesor(db.get('cursos', []), rutas, ip_controlador, db)
             elif opcion == '2':
-                print("Saliendo...")
+                print(Fore.YELLOW + "Saliendo...")
+                borrar_rutas(ip_controlador)  # Llamar a borrar las rutas
                 return
             else:
                 print(Fore.RED + "Opción inválida. Intenta nuevamente.\n")
@@ -561,30 +580,30 @@ def mostrar_menu(usuario, db, rutas, ip_controlador):
             elif opcion == '2':
                 administrar_cursos()  # Función para administrar cursos
             elif opcion == '3':
-                print("Cerrando sesión...")
+                print(Fore.YELLOW + "Cerrando sesión...")
+                borrar_rutas(ip_controlador)  # Llamar a borrar las rutas
                 return
             else:
                 print(Fore.RED + "Opción inválida. Intenta nuevamente.\n")
-        
+
         else:
             print(Fore.RED + "Error: Rol no reconocido.")
             return
 
-
-
 #PROFESOR **********************************************************************************************************************************************
-def gestionar_cursos_profesor(cursos):
-    # Listar los cursos donde el profesor está asignado
-    cursos_profesor = [curso for curso in cursos if curso['profesor'] == usuario['codigo']]
+def gestionar_cursos_profesor(cursos, rutas, ip_controlador, db):
+    """
+    Permite al profesor gestionar todos los cursos existentes.
+    Si selecciona un curso donde no es profesor, se muestra un mensaje de acceso denegado.
+    Si es profesor, sigue el flujo de conexión y validación.
+    """
+    print(Fore.CYAN + Style.BRIGHT + "\n== Cursos Existentes ==\n")
     
-    if not cursos_profesor:
-        print(Fore.RED + "No estás asignado a ningún curso.\n")
-        return
-
+    # Mostrar todos los cursos disponibles
     encabezados = ['Número', 'Código del Curso', 'Nombre del Curso']
-    lista_cursos = [[index, curso['codigo_curso'], curso['nombre']] for index, curso in enumerate(cursos_profesor, start=1)]
-    
-    # Imprimir los cursos
+    lista_cursos = [[index, curso['codigo_curso'], curso['nombre']] for index, curso in enumerate(cursos, start=1)]
+
+    # Imprimir la tabla
     print(Fore.GREEN + tabulate(lista_cursos, headers=encabezados, tablefmt='grid'))
     
     print("\n0. Volver atrás")
@@ -593,12 +612,57 @@ def gestionar_cursos_profesor(cursos):
     if opcion == '0':
         return
 
-    if opcion.isdigit() and 0 < int(opcion) <= len(cursos_profesor):
-        curso_seleccionado = cursos_profesor[int(opcion) - 1]
-        menu_curso_profesor(curso_seleccionado)
+    if opcion.isdigit() and 0 < int(opcion) <= len(cursos):
+        curso_seleccionado = cursos[int(opcion) - 1]
+
+        # Validar si el usuario es profesor del curso seleccionado
+        if usuario['codigo'] != curso_seleccionado['profesor']:
+            print(Fore.RED + f"Usted no es profesor del curso {curso_seleccionado['nombre']}.\n")
+            return
+
+        # Continuar con el flujo si es profesor del curso
+        servidor_info = next(
+            (s for s in rutas['servidores'] if s['codigo_servidor'] == curso_seleccionado['servidor'][0]['codigo_servidor']),
+            None
+        )
+        if not servidor_info or 'attachmentPoint' not in servidor_info:
+            print(Fore.RED + "No se encontró información del servidor o su Attachment Point en rutas.yaml.")
+            return
+
+        usuario_attachment_point = next(
+            (u['attachmentPoint'][0] for u in rutas['usuarios'] if u['codigo'] == usuario['codigo']),
+            None
+        )
+        if not usuario_attachment_point:
+            print(Fore.RED + "No se encontró el Attachment Point del usuario en rutas.yaml.")
+            return
+
+        # Obtener los datos necesarios para la ruta
+        src_dpid = usuario_attachment_point['switchDPID']
+        src_port = usuario_attachment_point['port']
+        dst_dpid = servidor_info['attachmentPoint'][0]['switchDPID']
+        dst_port = servidor_info['attachmentPoint'][0]['port']
+
+        # Obtener la ruta mediante la API REST de Floodlight y guardar en impresion_estaticas.yaml
+        get_route(ip_controlador, src_dpid, src_port, dst_dpid, dst_port)
+
+        # Validar conectividad SSH y ping al servidor
+        if validar_conectividad_desde_h1(
+            ip_gateway=ip_controlador,
+            port=usuario['port'],  # Suponiendo que se tenga esta información del usuario
+            usuario_h1=usuario['usuario_h1'],  # Usuario SSH para h1
+            contra_h1=usuario['contra_h1'],  # Contraseña SSH para h1
+            ip_destino=servidor_info['ip'],  # IP del servidor del curso
+            curso=curso_seleccionado,
+            db=db
+        ):
+            print(Fore.GREEN + f"Acceso exitoso al curso {curso_seleccionado['nombre']}.")
+        else:
+            print(Fore.RED + "No se pudo validar la conectividad al servidor. No hay ping.")
     else:
         print(Fore.RED + "Opción inválida. Intenta nuevamente.\n")
-        gestionar_cursos_profesor(cursos)
+        gestionar_cursos_profesor(cursos, rutas, ip_controlador, db)
+
 
 def menu_curso_profesor(curso):
     # Menú para el curso seleccionado

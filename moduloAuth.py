@@ -22,7 +22,7 @@ usuario = None
 
 #FUNCIONES DE RUTAS *********************************************************************************************************************************** 
 
-def build_routes(ip_controlador):
+def crear_ruta(ip_controlador):
     """
     Inserta rutas estáticas en Floodlight según la información generada en 'impresion_estaticas.yaml'.
     Incluye reglas de ARP para todos los switches involucrados, eliminando reglas redundantes.
@@ -123,8 +123,8 @@ def get_route(ip_controlador, src_dpid, src_port, dst_dpid, dst_port):
                 yaml.dump(ruta, archivo, default_flow_style=False, allow_unicode=True)
             print(Fore.GREEN + f"Ruta guardada en {ruta_archivo}.")
 
-            # Llamar a build_routes para construir las rutas estáticas automáticamente
-            build_routes(ip_controlador)
+            # Llamar a crear_ruta para construir las rutas estáticas automáticamente
+            crear_ruta(ip_controlador)
 
         else:
             print(Fore.RED + f"Error al obtener la ruta: {response.status_code}")
@@ -268,6 +268,8 @@ def validar_usuario_curso(usuario_logueado, curso):
     print(f"El usuario {usuario_logueado['nombre']} ({usuario_logueado['rol']}) no tiene acceso al curso {curso['nombre']}.")
     return False
 
+import time  # Importar para usar un temporizador
+
 def validar_conectividad_desde_h1(ip_gateway, port, usuario_h1, contra_h1, ip_destino, curso, db):
     """
     Valida la conectividad desde h1 mediante SSH y realiza un ping al destino.
@@ -278,6 +280,14 @@ def validar_conectividad_desde_h1(ip_gateway, port, usuario_h1, contra_h1, ip_de
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh_client.connect(ip_gateway, port=port, username=usuario_h1, password=contra_h1)
         print(Fore.GREEN + "Conexión SSH a h1 establecida.")
+
+        # Preguntar si se desea continuar con el ping
+        validacion_ping_propia = input(Fore.YELLOW + "¿Desea continuar con el ping o modificar (SI/NO)? ").strip().upper()
+
+        if validacion_ping_propia == "NO":
+            print(Fore.YELLOW + "Deteniéndose antes de realizar el ping. Puede realizar modificaciones si lo necesita.")
+            time.sleep(15)
+            return False
 
         # Realizar un ping desde h1 al servidor destino
         comando_ping = f"ping -c 1 {ip_destino}"
@@ -292,9 +302,11 @@ def validar_conectividad_desde_h1(ip_gateway, port, usuario_h1, contra_h1, ip_de
         else:
             print(Fore.RED + f"Ping fallido al destino {ip_destino}: {output}")
             return False
+
     except paramiko.SSHException as e:
         print(Fore.RED + f"Error al conectarse a h1: {e}")
         return False
+
 
 
 # Función para guardar las rutas actualizadas
@@ -418,7 +430,7 @@ def ver_cursos(usuario, cursos, db, rutas, ip_controlador):
             ):
                 print(Fore.GREEN + f"Acceso exitoso al curso {curso_seleccionado['nombre']}.")
             else:
-                print(Fore.RED + "No se pudo validar la conectividad al servidor.")
+                print(Fore.RED + "No se pudo validar la conectividad al servidor. No hay ping.")
         else:
             print(Fore.RED + f"El usuario {usuario['nombre']} no tiene acceso al curso {curso_seleccionado['nombre']}.")
     else:

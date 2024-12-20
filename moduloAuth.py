@@ -22,6 +22,30 @@ usuario = None
 
 #FUNCIONES DE RUTAS *********************************************************************************************************************************** 
 
+def get_route(ip_controlador, src_dpid, src_port, dst_dpid, dst_port):
+    """
+    Llama a la API REST de Floodlight para obtener la ruta entre los puntos fuente y destino.
+    Guarda el resultado en 'impresion_estaticas.yaml'.
+    """
+    url = f"http://{ip_controlador}:8080/wm/topology/route/{src_dpid}/{src_port}/{dst_dpid}/{dst_port}/json"
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            ruta = response.json()
+            print(Fore.GREEN + "Ruta obtenida exitosamente.")
+
+            # Guardar la ruta en impresion_estaticas.yaml
+            ruta_archivo = os.path.join(os.path.dirname(__file__), "impresion_estaticas.yaml")
+            with open(ruta_archivo, 'w', encoding="utf-8") as archivo:
+                yaml.dump(ruta, archivo, default_flow_style=False, allow_unicode=True)
+            print(Fore.GREEN + f"Ruta guardada en {ruta_archivo}.")
+        else:
+            print(Fore.RED + f"Error al obtener la ruta: {response.status_code}")
+    except Exception as e:
+        print(Fore.RED + f"Excepción al obtener la ruta: {e}")
+
+
+
 # Función para obtener los dispositivos conectados
 def obtener_dispositivos(ip_controlador):
     url = f"http://{ip_controlador}:8080/wm/device/"
@@ -241,23 +265,44 @@ def ver_cursos(usuario, cursos, db, rutas, ip_controlador):
 
         # Validar si el usuario pertenece al curso
         if validar_usuario_curso(usuario, curso_seleccionado):
-            servidor = curso_seleccionado['servidor'][0]
-            servidor_info = next((s for s in rutas['servidores'] if s['codigo_servidor'] == servidor['codigo_servidor']), None)
-
-            if not servidor_info or 'ip' not in servidor_info:
-                print(Fore.RED + "No se encontró información del servidor o su IP en rutas.yaml.")
+            servidor_info = next(
+                (s for s in rutas['servidores'] if s['codigo_servidor'] == curso_seleccionado['servidor'][0]['codigo_servidor']),
+                None
+            )
+            if not servidor_info or 'attachmentPoint' not in servidor_info:
+                print(Fore.RED + "No se encontró información del servidor o su Attachment Point en rutas.yaml.")
                 return
 
+            usuario_attachment_point = next(
+                (u['attachmentPoint'][0] for u in rutas['usuarios'] if u['codigo'] == usuario['codigo']),
+                None
+            )
+            if not usuario_attachment_point:
+                print(Fore.RED + "No se encontró el Attachment Point del usuario en rutas.yaml.")
+                return
+
+            # Obtener los datos necesarios para la ruta
+            src_dpid = usuario_attachment_point['switchDPID']
+            src_port = usuario_attachment_point['port']
+            dst_dpid = servidor_info['attachmentPoint'][0]['switchDPID']
+            dst_port = servidor_info['attachmentPoint'][0]['port']
+
+            # Obtener la ruta mediante la API REST de Floodlight y guardar en impresion_estaticas.yaml
+            get_route(ip_controlador, src_dpid, src_port, dst_dpid, dst_port)
+            
             # Validar conectividad SSH y ping al servidor
-            validar_conectividad_desde_h1(
+            if validar_conectividad_desde_h1(
                 ip_gateway=ip_controlador,
                 port=usuario['port'],
                 usuario_h1=usuario['usuario_h1'],
                 contra_h1=usuario['contra_h1'],
                 ip_destino=servidor_info['ip'],
-                curso=curso_seleccionado,  # Pasar el curso seleccionado
-                db=db  # Pasar la base de datos
-            )
+                curso=curso_seleccionado,
+                db=db
+            ):
+                print(Fore.GREEN + f"Acceso exitoso al curso {curso_seleccionado['nombre']}.")
+            else:
+                print(Fore.RED + "No se pudo validar la conectividad al servidor.")
         else:
             print(Fore.RED + f"El usuario {usuario['nombre']} no tiene acceso al curso {curso_seleccionado['nombre']}.")
     else:

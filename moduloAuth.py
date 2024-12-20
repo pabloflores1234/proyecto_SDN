@@ -1121,7 +1121,7 @@ def main():
     # Actualizar attachment points de todos los usuarios al inicio
     usuarios = db['usuarios']
     servidores = db['servidores']
-
+    
     actualizar_attachment_points_servidores(ip_controlador, rutas, servidores)
 
     actualizar_attachment_points_usuarios(ip_controlador, rutas, usuarios)

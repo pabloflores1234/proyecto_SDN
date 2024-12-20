@@ -72,43 +72,6 @@ def actualizar_attachment_points_usuarios(ip_controlador, rutas, usuarios):
     # Guardar los cambios en rutas.yaml
     guardar_rutas(rutas)
 
-
-def actualizar_attachment_points_servidores(ip_controlador, rutas, servidores):
-    dispositivos = obtener_dispositivos(ip_controlador)
-
-    # Mapear servidores por su MAC
-    macs_servidores = {servidor['mac']: servidor for servidor in servidores}
-
-    # Crear una lista de servidores con attachmentPoints actualizados
-    servidores_actualizados = []
-
-    for servidor in servidores:
-        mac = servidor['mac']
-        attachment_points = []
-
-        # Buscar el dispositivo que coincida con la MAC del servidor
-        for dispositivo in dispositivos:
-            if dispositivo.get('mac', [None])[0] == mac:
-                attachment_points = [
-                    {'switchDPID': ap.get('switchDPID'), 'port': ap.get('port')}
-                    for ap in dispositivo.get('attachmentPoint', [])
-                ]
-                break
-
-        # Agregar o actualizar el servidor en la lista de rutas
-        servidores_actualizados.append({
-            'codigo_servidor': servidor['codigo_servidor'],
-            'nombre': servidor['nombre'],
-            'ip':servidor['ip'],
-            'attachmentPoint': attachment_points,
-        })
-
-    # Reemplazar la lista de servidores en rutas.yaml
-    rutas['servidores'] = servidores_actualizados
-
-    # Guardar los cambios en rutas.yaml
-    guardar_rutas(rutas)
-
 def actualizar_attachment_point_usuario_logueado(ip_controlador, rutas, usuario_logueado):
     dispositivos = obtener_dispositivos(ip_controlador)
     mac = usuario_logueado['mac']
@@ -140,24 +103,6 @@ def actualizar_attachment_point_usuario_logueado(ip_controlador, rutas, usuario_
     guardar_rutas(rutas)
     print(f"Attachment point del usuario {usuario_logueado['nombre']} actualizado en rutas.yaml.")
 
-def crear_ruta_estatica(ip_controlador, src_dpid, src_port, dst_dpid, dst_port):
-    try:
-        url = f"http://{ip_controlador}:8080/wm/staticflowpusher/json"
-        flow_entry = {
-            "switch": src_dpid,
-            "name": f"flow-{src_dpid}-{dst_dpid}",
-            "cookie": "0",
-            "priority": "1000",
-            "ingress-port": src_port,
-            "actions": f"output={dst_port}"
-        }
-        response = requests.post(url, json=flow_entry)
-        response.raise_for_status()
-        print("Ruta estática creada exitosamente.")
-        return True
-    except requests.RequestException as e:
-        print(f"Error al crear la ruta estática: {e}")
-        return False
 
 
 def validar_usuario_curso(usuario_logueado, curso):
@@ -183,71 +128,33 @@ def validar_usuario_curso(usuario_logueado, curso):
     print(f"El usuario {usuario_logueado['nombre']} ({usuario_logueado['rol']}) no tiene acceso al curso {curso['nombre']}.")
     return False
 
-def validar_conectividad_desde_h1(ip_gateway, port, usuario_h1, contra_h1, ip_destino):
+def validar_conectividad_desde_h1(ip_gateway, port, usuario_h1, contra_h1, ip_destino, curso, db):
+    """
+    Valida la conectividad desde h1 mediante SSH y realiza un ping al destino.
+    Si la validación es exitosa, procede a mostrar la información del curso.
+    """
     try:
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh_client.connect(ip_gateway, port=port, username=usuario_h1, password=contra_h1)
-        print("Conexión SSH a h1 establecida.")
+        print(Fore.GREEN + "Conexión SSH a h1 establecida.")
 
+        # Realizar un ping desde h1 al servidor destino
         comando_ping = f"ping -c 1 {ip_destino}"
         stdin, stdout, stderr = ssh_client.exec_command(comando_ping)
         output = stdout.read().decode('utf-8')
         ssh_client.close()
 
         if "1 packets transmitted, 1 received" in output:
-            print("Conectividad validada con éxito desde h1.")
+            print(Fore.GREEN + f"Ping exitoso al destino {ip_destino}.")
+            mostrar_info_curso(curso, db)  # Llama a mostrar_info_curso si el ping es exitoso
             return True
         else:
-            print(f"Ping fallido desde h1: {output}")
+            print(Fore.RED + f"Ping fallido al destino {ip_destino}: {output}")
             return False
     except paramiko.SSHException as e:
-        print(f"Error al conectarse a h1: {e}")
+        print(Fore.RED + f"Error al conectarse a h1: {e}")
         return False
-
-
-def manejar_seleccion_curso(usuario_logueado, curso, ip_controlador, rutas):
-    """
-    Gestiona la selección de un curso por parte del usuario logueado, incluyendo
-    la creación de rutas estáticas y la validación de conectividad.
-
-    Args:
-        usuario_logueado (dict): Información del usuario logueado.
-        curso (dict): Información del curso seleccionado.
-        ip_controlador (str): IP del controlador Floodlight.
-        rutas (dict): Información de attachment points en rutas.yaml.
-    
-    Returns:
-        bool: True si todo fue exitoso, False si hubo errores.
-    """
-    # Validar si el usuario tiene acceso al curso
-    if not validar_usuario_curso(usuario_logueado, curso):
-        return False
-
-    # Obtener datos de attachment points
-    src_dpid = rutas['usuarios'][usuario_logueado['codigo']]['attachmentPoint'][0]['switchDPID']
-    src_port = rutas['usuarios'][usuario_logueado['codigo']]['attachmentPoint'][0]['port']
-    dst_dpid = rutas['servidores'][curso['servidor'][0]['nombre']]['attachmentPoint'][0]['switchDPID']
-    dst_port = rutas['servidores'][curso['servidor'][0]['nombre']]['attachmentPoint'][0]['port']
-
-    # Crear la ruta estática
-    if not crear_ruta_estatica(ip_controlador, src_dpid, src_port, dst_dpid, dst_port):
-        print("Error al crear la ruta estática. Abortando.")
-        return False
-
-    # Validar conectividad desde h1
-    ip_gateway = "10.20.12.146"
-    port = 5811
-    usuario_h1 = usuario_logueado['usuario_h1']
-    contra_h1 = usuario_logueado['contra_h1']
-    ip_servidor = curso['servidor'][0]['ip']
-
-    if not validar_conectividad_desde_h1(ip_gateway, port, usuario_h1, contra_h1, ip_servidor):
-        print("Conectividad no validada. Abortando.")
-        return False
-
-    print(f"El usuario {usuario_logueado['nombre']} ahora tiene acceso al curso {curso['nombre']}.")
-    return True
 
 
 # Función para guardar las rutas actualizadas
@@ -309,17 +216,9 @@ def login(usuarios):
         # Si no se encontró el usuario o la contraseña no coincide
         print(Fore.RED + "\nCredenciales incorrectas. Intente nuevamente.\n")
 
-# Función de ver cursos
 def ver_cursos(usuario, cursos, db, rutas, ip_controlador):
     """
     Permite al usuario ver los cursos existentes y gestionar su acceso mediante rutas y validaciones.
-
-    Args:
-        usuario (dict): Información del usuario logueado.
-        cursos (list): Lista de cursos.
-        db (dict): Base de datos de usuarios, cursos, etc.
-        rutas (dict): Datos de attachment points en rutas.yaml.
-        ip_controlador (str): Dirección IP del controlador Floodlight.
     """
     print(Fore.CYAN + Style.BRIGHT + "\n== Cursos Existentes ==\n")
     
@@ -345,34 +244,20 @@ def ver_cursos(usuario, cursos, db, rutas, ip_controlador):
             servidor = curso_seleccionado['servidor'][0]
             servidor_info = next((s for s in rutas['servidores'] if s['codigo_servidor'] == servidor['codigo_servidor']), None)
 
-
             if not servidor_info or 'ip' not in servidor_info:
                 print(Fore.RED + "No se encontró información del servidor o su IP en rutas.yaml.")
                 return
 
-            # Obtener los attachment points
-            usuario_ap = next((u['attachmentPoint'] for u in rutas['usuarios'] if u['codigo'] == usuario['codigo']), [])
-            servidor_ap = servidor_info['attachmentPoint']
-
-            if not usuario_ap or not servidor_ap:
-                print(Fore.RED + "Faltan datos de attachment point para el usuario o el servidor.")
-                return
-
-            # Crear la ruta estática
-            if crear_ruta_estatica(ip_controlador, usuario_ap[0]['switchDPID'], usuario_ap[0]['port'], servidor_ap[0]['switchDPID'], servidor_ap[0]['port']):
-                # Validar conectividad desde h1
-                if validar_conectividad_desde_h1(
-                        ip_gateway=ip_controlador,
-                        port=5811,
-                        usuario_h1=usuario['usuario_h1'],
-                        contra_h1=usuario['contra_h1'],
-                        ip_destino=servidor_info['ip']):
-                    print(Fore.GREEN + f"¡Ruta creada y conectividad validada para el curso {curso_seleccionado['nombre']}!")
-                    mostrar_info_curso(curso_seleccionado, db)
-                else:
-                    print(Fore.RED + "La ruta fue creada, pero la conectividad no fue validada desde h1.")
-            else:
-                print(Fore.RED + "No se pudo crear la ruta estática.")
+            # Validar conectividad SSH y ping al servidor
+            validar_conectividad_desde_h1(
+                ip_gateway=ip_controlador,
+                port=usuario['port'],
+                usuario_h1=usuario['usuario_h1'],
+                contra_h1=usuario['contra_h1'],
+                ip_destino=servidor_info['ip'],
+                curso=curso_seleccionado,  # Pasar el curso seleccionado
+                db=db  # Pasar la base de datos
+            )
         else:
             print(Fore.RED + f"El usuario {usuario['nombre']} no tiene acceso al curso {curso_seleccionado['nombre']}.")
     else:
@@ -1064,20 +949,15 @@ def agregar_curso():
 
 def main():
     # Cargar las bases de datos
-    db_usuarios = cargar_base_datos_usuarios()  # Base de datos de usuarios
-    rutas = cargar_base_datos_rutas()  # Inicializar o cargar rutas.yaml
-
-    # Mostrar el banner
+    db_usuarios = cargar_base_datos_usuarios()
+    rutas = cargar_base_datos_rutas()
     mostrar_banner()
 
-    # IP del controlador Floodlight
     ip_controlador = "10.20.12.146"
 
     # Actualizar attachment points de todos los usuarios al inicio
     usuarios = db_usuarios['usuarios']
-    servidores =db_usuarios['servidores']
     actualizar_attachment_points_usuarios(ip_controlador, rutas, usuarios)
-    actualizar_attachment_points_servidores(ip_controlador,rutas, servidores)
 
     # Login del usuario
     usuario_logueado = login(db_usuarios['usuarios'])

@@ -3,6 +3,7 @@ usuarios:
     contrasenia: a123
     mac: fa:16:3e:28:2e:98
     ip: 10.0.0.1
+    port: 5811
     usuario_h1: ubuntu
     contra_h1: Pablox12344
     nombre: Carlos Gomez
@@ -11,6 +12,7 @@ usuarios:
     contrasenia: a123
     mac: fa:16:3e:28:2e:98
     ip: 10.0.0.1
+    port: 5811
     usuario_h1: ubuntu
     contra_h1: Pablox12344
     nombre: Ana Rivera
@@ -19,6 +21,7 @@ usuarios:
     contrasenia: a123
     mac: fa:16:3e:28:2e:98
     ip: 10.0.0.1
+    port: 5811
     usuario_h1: ubuntu
     contra_h1: Pablox12344
     nombre: Juan Martinez
@@ -27,6 +30,7 @@ usuarios:
     contrasenia: a123
     mac: fa:16:3e:28:2e:98
     ip: 10.0.0.1
+    port: 5811
     usuario_h1: ubuntu
     contra_h1: Pablox12344
     nombre: Armando Casas
@@ -35,6 +39,7 @@ usuarios:
     contrasenia: a123
     mac: fa:16:3e:28:2e:98
     ip: 10.0.0.1
+    port: 5811
     usuario_h1: ubuntu
     contra_h1: Pablox12344
     nombre: Manuel Yarleque
@@ -42,6 +47,7 @@ usuarios:
 cursos:
   - alumnos:
       - 20241001
+      - 20241003
     codigo_curso: TEL201
     nombre: Redes Definidas por Software
     profesor: 20001002

@@ -22,10 +22,93 @@ usuario = None
 
 #FUNCIONES DE RUTAS *********************************************************************************************************************************** 
 
+def build_routes(ip_controlador):
+    """
+    Inserta rutas estáticas en Floodlight según la información generada en 'impresion_estaticas.yaml'.
+    Incluye reglas de ARP para todos los switches involucrados, eliminando reglas redundantes.
+    """
+    ruta_archivo = os.path.join(os.path.dirname(__file__), "impresion_estaticas.yaml")
+    
+    # Leer la ruta desde el archivo impresion_estaticas.yaml
+    try:
+        with open(ruta_archivo, 'r', encoding="utf-8") as archivo:
+            rutas = yaml.safe_load(archivo)
+    except FileNotFoundError:
+        print(Fore.RED + f"Error: No se encontró el archivo {ruta_archivo}.")
+        return
+    except yaml.YAMLError as e:
+        print(Fore.RED + f"Error al leer el archivo YAML: {e}")
+        return
+
+    # Verificar si las rutas están definidas
+    if not rutas:
+        print(Fore.RED + "Error: No hay rutas definidas en impresion_estaticas.yaml.")
+        return
+
+    # Construir las reglas
+    reglas = []
+    for i in range(len(rutas) - 1):
+        src_switch = rutas[i]["switch"]
+        src_port = rutas[i]["port"]["portNumber"]
+        dst_switch = rutas[i + 1]["switch"]
+        dst_port = rutas[i + 1]["port"]["portNumber"]
+
+        # Evitar rutas redundantes (cuando in_port == out_port)
+        if src_port != dst_port:
+            # Regla para el flujo de ida
+            reglas.append({
+                "switch": src_switch,
+                "name": f"flow-{src_switch}-{src_port}-to-{dst_port}",
+                "cookie": "0",
+                "priority": "9000",
+                "in_port": src_port,
+                "active": "true",
+                "actions": f"output={dst_port}"
+            })
+
+            # Regla para el flujo de retorno
+            reglas.append({
+                "switch": dst_switch,
+                "name": f"flow-{dst_switch}-{dst_port}-to-{src_port}",
+                "cookie": "0",
+                "priority": "9000",
+                "in_port": dst_port,
+                "active": "true",
+                "actions": f"output={src_port}"
+            })
+
+    # Incluir reglas de ARP para todos los switches involucrados
+    switches_involucrados = set(ruta["switch"] for ruta in rutas)
+    for switch in switches_involucrados:
+        reglas.append({
+            "switch": switch,
+            "name": f"allow-arp-{switch}",
+            "cookie": "0",
+            "priority": "9000",
+            "ether-type": "0x0806",
+            "active": "true",
+            "actions": "output=flood"
+        })
+
+    # Enviar las reglas a Floodlight
+    url = f"http://{ip_controlador}:8080/wm/staticflowpusher/json"
+    for regla in reglas:
+        try:
+            response = requests.post(url, json=regla)
+            if response.status_code == 200:
+                print(Fore.GREEN + f"Regla insertada exitosamente: {regla['name']}")
+            else:
+                print(Fore.RED + f"Error al insertar la regla {regla['name']}: {response.status_code}")
+        except Exception as e:
+            print(Fore.RED + f"Excepción al insertar la regla {regla['name']}: {e}")
+
+
+
+
 def get_route(ip_controlador, src_dpid, src_port, dst_dpid, dst_port):
     """
     Llama a la API REST de Floodlight para obtener la ruta entre los puntos fuente y destino.
-    Guarda el resultado en 'impresion_estaticas.yaml'.
+    Guarda el resultado en 'impresion_estaticas.yaml' y luego construye las rutas estáticas automáticamente.
     """
     url = f"http://{ip_controlador}:8080/wm/topology/route/{src_dpid}/{src_port}/{dst_dpid}/{dst_port}/json"
     try:
@@ -39,11 +122,14 @@ def get_route(ip_controlador, src_dpid, src_port, dst_dpid, dst_port):
             with open(ruta_archivo, 'w', encoding="utf-8") as archivo:
                 yaml.dump(ruta, archivo, default_flow_style=False, allow_unicode=True)
             print(Fore.GREEN + f"Ruta guardada en {ruta_archivo}.")
+
+            # Llamar a build_routes para construir las rutas estáticas automáticamente
+            build_routes(ip_controlador)
+
         else:
             print(Fore.RED + f"Error al obtener la ruta: {response.status_code}")
     except Exception as e:
         print(Fore.RED + f"Excepción al obtener la ruta: {e}")
-
 
 
 # Función para obtener los dispositivos conectados
@@ -59,6 +145,36 @@ def obtener_dispositivos(ip_controlador):
     except Exception as e:
         print(f"Excepción al obtener dispositivos: {e}")
         return []
+
+def actualizar_attachment_points_servidores(ip_controlador, rutas, servidores):
+    dispositivos = obtener_dispositivos(ip_controlador)
+    # Mapear servidores por su MAC
+    macs_servidores = {servidor['mac']: servidor for servidor in servidores}
+    # Crear una lista de servidores con attachmentPoints actualizados
+    servidores_actualizados = []
+    for servidor in servidores:
+        mac = servidor['mac']
+        attachment_points = []
+        # Buscar el dispositivo que coincida con la MAC del servidor
+        for dispositivo in dispositivos:
+            if dispositivo.get('mac', [None])[0] == mac:
+                attachment_points = [
+                    {'switchDPID': ap.get('switchDPID'), 'port': ap.get('port')}
+                    for ap in dispositivo.get('attachmentPoint', [])
+                ]
+                break
+        # Agregar o actualizar el servidor en la lista de rutas
+        servidores_actualizados.append({
+            'codigo_servidor': servidor['codigo_servidor'],
+            'nombre': servidor['nombre'],
+            'ip': servidor['ip'],
+            'attachmentPoint': attachment_points,
+        })
+    # Reemplazar la lista de servidores en rutas.yaml
+    rutas['servidores'] = servidores_actualizados
+    # Guardar los cambios en rutas.yaml
+    guardar_rutas(rutas)
+
 
 # Función para actualizar attachment points en rutas.yaml
 def actualizar_attachment_points_usuarios(ip_controlador, rutas, usuarios):
@@ -293,10 +409,10 @@ def ver_cursos(usuario, cursos, db, rutas, ip_controlador):
             # Validar conectividad SSH y ping al servidor
             if validar_conectividad_desde_h1(
                 ip_gateway=ip_controlador,
-                port=usuario['port'],
-                usuario_h1=usuario['usuario_h1'],
-                contra_h1=usuario['contra_h1'],
-                ip_destino=servidor_info['ip'],
+                port=usuario['port'],  # Suponiendo que se tenga esta información del usuario
+                usuario_h1=usuario['usuario_h1'],  # Usuario SSH para h1
+                contra_h1=usuario['contra_h1'],  # Contraseña SSH para h1
+                ip_destino=servidor_info['ip'],  # IP del servidor del curso
                 curso=curso_seleccionado,
                 db=db
             ):
@@ -308,6 +424,7 @@ def ver_cursos(usuario, cursos, db, rutas, ip_controlador):
     else:
         print(Fore.RED + "Opción inválida. Intenta nuevamente.\n")
         ver_cursos(usuario, cursos, db, rutas, ip_controlador)
+
 
 
 
@@ -1002,6 +1119,10 @@ def main():
 
     # Actualizar attachment points de todos los usuarios al inicio
     usuarios = db_usuarios['usuarios']
+    servidores = db_usuarios['servidores']
+
+    actualizar_attachment_points_servidores(ip_controlador, rutas, servidores)
+
     actualizar_attachment_points_usuarios(ip_controlador, rutas, usuarios)
 
     # Login del usuario
